@@ -2,25 +2,26 @@ import express from "express"
 import dotenv from "dotenv"
 import {chats} from "./data/data.js"
 import connectDb from "./config/db.js"
+import userRoutes from "./routes/userRoute.js"
+import { errorHandler, notFound } from "./middleware/errorMiddleware.js"
 
 dotenv.config()
 
 connectDb()
 const app = express();
 
+app.use(express.json())
+
 app.get("/", (req,res)=>{
     res.send("Api is running")
 })
 
-app.get("/api/chats",(req,res)=>{
-    res.send(chats)
-})
+app.use("/api/user",userRoutes)
 
-app.get("/api/chat/:id",(req,res)=>{
-    const singleChat = chats.find(c => c._id === req.params.id)
-    res.send(singleChat)
-    
-})
+
+// middleware routes
+app.use(notFound)
+app.use(errorHandler)
 
 app.listen(process.env.PORT,() => 
     console.log(`Server lsitening on ${process.env.PORT}`)
