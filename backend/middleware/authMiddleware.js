@@ -1,33 +1,43 @@
-import User from "../models/userModel.js"; // Importing the User model
-import jwt from "jsonwebtoken"; // Importing the JWT library for token verification
-import asyncHandler from "express-async-handler"; // Wrapping async route handlers
+import jwt from "jsonwebtoken";
+import User from "../models/userModel.js";
+import asyncHandler from "express-async-handler";
 
-// Middleware to protect routes by verifying the JWT token
 export const protect = asyncHandler(async (req, res, next) => {
     let token;
 
-    // Check if the Authorization header exists and starts with 'Bearer'
-    if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
+    if (
+        req.headers.authorization &&
+        req.headers.authorization.startsWith("Bearer")
+    ) {
         try {
-            // Extracting the token from the 'Bearer' scheme
+            // Get token from header
             token = req.headers.authorization.split(" ")[1];
 
-            // Decode the token using the JWT secret to get the user ID
+            // Verify token
+            if (!process.env.JWT_SECRET) {
+                throw new Error("JWT_SECRET is not defined in environment variables");
+            }
+            
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-            // Find the user by ID and exclude the password field
-            req.user = await User.findById(decoded.id).select("-password");
+            // Get user from database
+            const user = await User.findById(decoded.id).select("-password");
+            
+            if (!user) {
+                res.status(401);
+                throw new Error("Not authorized, user not found");
+            }
 
-            // Proceed to the next middleware if the token is valid
+            // Set the user in the request object
+            req.user = user;
             next();
-
         } catch (error) {
-            // Respond with a 401 Unauthorized status if token verification fails
             res.status(401);
             throw new Error("Not authorized, token failed");
         }
-    } else {
-        // Respond with a 401 Unauthorized status if no token is found
+    }
+
+    if (!token) {
         res.status(401);
         throw new Error("Not authorized, no token");
     }

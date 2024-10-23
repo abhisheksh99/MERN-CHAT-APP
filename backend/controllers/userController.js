@@ -1,86 +1,134 @@
-import User from "../models/userModel.js"; // Importing the User model
-import asyncHandler from "express-async-handler"; // Wrapping async functions to handle errors automatically
-import generateToken from "../utils/generateToken.js"; // Function to generate JWT tokens
-import bcrypt from "bcryptjs"; // Importing bcrypt for password comparison
+import User from "../models/userModel.js";
+import asyncHandler from "express-async-handler";
+import generateToken from "../utils/generateToken.js";
+import bcrypt from "bcryptjs";
 
-// Controller to handle user registration
+// @desc    Register new user
+// @route   POST /api/user/signup
+// @access  Public
 export const registerUser = asyncHandler(async (req, res) => {
-    const { name, email, password, image } = req.body; // Destructure the user details from the request body
+    const { name, email, password, image } = req.body;
 
-    // Ensure all required fields are provided
+    // Validate input
     if (!name || !email || !password) {
-        res.status(400); // Bad request status
-        throw new Error("Please enter all fields."); // Throw error if fields are missing
+        res.status(400);
+        throw new Error("Please enter all required fields");
     }
 
-    // Check if the user already exists based on the email
-    const userExist = await User.findOne({ email });
-    if (userExist) {
-        res.status(400); // Bad request status
-        throw new Error("User already exists!"); // Throw error if the user already exists
+    // Check if user exists
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+        res.status(400);
+        throw new Error("User already exists");
     }
 
-    // Create a new user
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create user
     const user = await User.create({
         name,
         email,
-        password,
-        image,
+        password: hashedPassword,
+        image: image || "https://icon-library.com/images/anonymous-avatar-icon/anonymous-avatar-icon-25.jpg",
     });
 
-    // If user creation is successful, return the user's data along with a token
     if (user) {
         res.status(201).json({
             _id: user._id,
             name: user.name,
             email: user.email,
             image: user.image,
-            token: generateToken(user._id), // Generating JWT token for authentication
+            token: generateToken(user._id),
         });
     } else {
-        res.status(400); // Bad request status
-        throw new Error("Failed to create user."); // Throw error if user creation fails
+        res.status(400);
+        throw new Error("Invalid user data");
     }
 });
 
-// Controller to authenticate a user (login)
+// @desc    Auth user & get token
+// @route   POST /api/user/login
+// @access  Public
 export const authUser = asyncHandler(async (req, res) => {
-    const { email, password } = req.body; // Destructure email and password from request body
+    const { email, password } = req.body;
 
-    // Find the user based on the provided email
+    // Validate input
+    if (!email || !password) {
+        res.status(400);
+        throw new Error("Please enter all required fields");
+    }
+
+    // Check for user email
     const user = await User.findOne({ email });
 
-    // If user exists and the provided password matches the stored hashed password
-    if (user && (await bcrypt.compare(password, user.password))) {
-        res.json({
-            _id: user._id,
-            name: user.name,
-            email: user.email,
-            image: user.image,
-            token: generateToken(user._id), // Return token for further authenticated requests
-        });
-    } else {
-        res.status(401); // Unauthorized status
-        throw new Error("Invalid Email or Password"); // Throw error if authentication fails
+    if (!user) {
+        res.status(401);
+        throw new Error("Invalid email or password");
     }
+
+    // Check password
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+        res.status(401);
+        throw new Error("Invalid email or password");
+    }
+
+    res.json({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        image: user.image,
+        token: generateToken(user._id),
+    });
 });
 
-// Controller to fetch all users, excluding the logged-in user, and supporting search functionality
-// /api/user?search=abhishek
+// @desc    Get all users or search users
+// @route   GET /api/user?search=
+// @access  Private
 export const allUsers = asyncHandler(async (req, res) => {
-    // If search query exists, create a keyword to search by name or email with case-insensitive matching
+    // Verify user is authenticated
+    if (!req.user) {
+        res.status(401);
+        throw new Error("Not authorized");
+    }
+
+    // Build search query
     const keyword = req.query.search
         ? {
               $or: [
-                  { name: { $regex: req.query.search, $options: "i" } }, // Case-insensitive name search
-                  { email: { $regex: req.query.search, $options: "i" } }, // Case-insensitive email search
+                  { name: { $regex: req.query.search, $options: "i" } },
+                  { email: { $regex: req.query.search, $options: "i" } },
               ],
           }
         : {};
 
-    // Fetch all users matching the search keyword, but exclude the logged-in user
-    const users = await User.find(keyword).find({ _id: { $ne: req.user._id } });
+    // Find users excluding the current user
+    const users = await User.find({
+        ...keyword,
+        _id: { $ne: req.user._id },
+    }).select("-password");
 
-    // Return the list of users
-    res.send(users);
+    res.json(users);
+});
+
+// @desc    Get user profile
+// @route   GET /api/user/profile
+// @access  Private
+export const getUserProfile = asyncHandler(async (req, res) => {
+    if (!req.user) {
+        res.status(401);
+        throw new Error("Not authorized");
+    }
+
+    const user = await User.findById(req.user._id).select("-password");
+
+    if (user) {
+        res.json(user);
+    } else {
+        res.status(404);
+        throw new Error("User not found");
+    }
 });
