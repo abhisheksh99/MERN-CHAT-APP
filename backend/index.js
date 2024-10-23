@@ -1,8 +1,11 @@
 import express from "express"
 import dotenv from "dotenv"
 import {chats} from "./data/data.js"
+import connectDb from "./config/db.js"
+
 dotenv.config()
 
+connectDb()
 const app = express();
 
 app.get("/", (req,res)=>{
