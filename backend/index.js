@@ -10,19 +10,23 @@ dotenv.config()
 connectDb()
 const app = express();
 
-app.use(express.json())
+// Increase the limit for JSON payloads
+app.use(express.json({ limit: '50mb' }));
+
+// Increase the limit for URL-encoded payloads
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.get("/", (req,res)=>{
     res.send("Api is running")
 })
 
-app.use("/api/user",userRoutes)
-
+app.use("/api/user", userRoutes)
 
 // middleware routes
 app.use(notFound)
 app.use(errorHandler)
 
-app.listen(process.env.PORT,() => 
-    console.log(`Server lsitening on ${process.env.PORT}`)
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => 
+    console.log(`Server listening on port ${PORT}`)
 )

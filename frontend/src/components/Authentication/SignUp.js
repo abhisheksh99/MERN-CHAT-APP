@@ -10,6 +10,9 @@ import {
   IconButton,
 } from "@chakra-ui/react";
 import { ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
+import { useToast } from "@chakra-ui/react";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 const SignUp = () => {
   const [name, setName] = useState("");
@@ -19,21 +22,89 @@ const SignUp = () => {
   const [image, setImage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const toast = useToast();
+  const navigate = useNavigate();
 
-  const handleSubmit = () => {
-    console.log({ name, email, password, confirmPassword, image });
+  const handleSubmit = async () => {
+    setIsLoading(true);
+    if (!name || !email || !password || !confirmPassword) {
+      toast({
+        title: "Please Fill all the fields",
+        status: "warning",
+        duration: 5000,
+        isClosable: true,
+        position: "top",
+      });
+      setIsLoading(false);
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast({
+        title: "Passwords do not match",
+        status: "warning",
+        duration: 5000,
+        isClosable: true,
+        position: "top",
+      });
+      setIsLoading(false);
+      return;
+    }
+    try {
+      const config = {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      };
+      const { data } = await axios.post("/api/user/signup", { name, email, password, image }, config);
+      toast({
+        title: "Registration successful",
+        status: "success",
+        duration: 5000,
+        isClosable: true,
+        position: "top",
+      });
+      localStorage.setItem("userInfo", JSON.stringify(data));
+      setIsLoading(false);
+      navigate("/chats");
+    } catch (error) {
+      toast({
+        title: "Error occurred during registration",
+        description: error.response?.data?.message || "An unexpected error occurred",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+        position: "top",
+      });
+      setIsLoading(false);
+    }
   };
 
+  // Updated handleImageUpload function
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      setImage(file);
+      if (file.size > 1048576) { // 1 MB limit
+        toast({
+          title: "File too large",
+          description: "Please upload an image smaller than 1MB",
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+          position: "top",
+        });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImage(reader.result);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
   const toggleShowPassword = () => setShowPassword(!showPassword);
-  const toggleShowConfirmPassword = () =>
-    setShowConfirmPassword(!showConfirmPassword);
+  const toggleShowConfirmPassword = () => setShowConfirmPassword(!showConfirmPassword);
 
   return (
     <VStack spacing={4} align="stretch" maxW="md" mx="auto" p={6} boxShadow="lg" borderRadius="md">
@@ -108,7 +179,7 @@ const SignUp = () => {
         />
       </FormControl>
 
-      <Button colorScheme="blue" onClick={handleSubmit}>
+      <Button colorScheme="blue" onClick={handleSubmit} isLoading={isLoading}>
         Sign Up
       </Button>
     </VStack>
